@@ -1,0 +1,860 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    />
+    <title>All of Me • Love Particles</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <!-- Remix Icon -->
+    <link
+      href="https://cdn.jsdelivr.net/npm/remixicon@4.3.0/fonts/remixicon.css"
+      rel="stylesheet"
+    />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script
+      src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"
+      crossorigin="anonymous"
+    ></script>
+    <script
+      src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"
+      crossorigin="anonymous"
+    ></script>
+    <style>
+      * {
+        font-family: "Fira Code", monospace !important;
+      }
+      body {
+        margin: 0;
+        overflow: hidden;
+        background: #030712;
+      }
+      #webcam {
+        transform: scaleX(-1);
+      }
+      canvas {
+        display: block;
+      }
+      .glass {
+        background: rgba(0, 0, 0, 0.55);
+        backdrop-filter: blur(18px);
+        -webkit-backdrop-filter: blur(18px);
+      }
+      .glass-strong {
+        background: rgba(0, 0, 0, 0.7);
+        backdrop-filter: blur(22px);
+        -webkit-backdrop-filter: blur(22px);
+      }
+      /* Smooth custom range */
+      input[type="range"] {
+        -webkit-appearance: none;
+        appearance: none;
+        height: 4px;
+        background: rgba(255, 255, 255, 0.15);
+        border-radius: 999px;
+        outline: none;
+      }
+      input[type="range"]::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        background: #fb7185;
+        cursor: pointer;
+        box-shadow: 0 0 8px rgba(251, 113, 133, 0.6);
+      }
+      .shape-pop {
+        animation: shapePop 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
+      }
+      @keyframes shapePop {
+        0% {
+          transform: scale(0.7);
+          opacity: 0.4;
+        }
+        70% {
+          transform: scale(1.08);
+        }
+        100% {
+          transform: scale(1);
+          opacity: 1;
+        }
+      }
+      .fade-in {
+        animation: fadeIn 0.6s ease-out forwards;
+      }
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+          transform: translateY(8px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+    </style>
+  </head>
+  <body
+    class="relative w-screen h-screen bg-gray-950 text-white overflow-hidden select-none"
+  >
+    <!-- Local Audio -->
+    <audio id="bg-music" loop preload="auto">
+      <source src="all-of-me.mp3" type="audio/mpeg" />
+    </audio>
+
+    <!-- Error -->
+    <div
+      id="error-msg"
+      class="hidden absolute inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4"
+    >
+      <div
+        class="glass-strong border border-red-500/30 rounded-2xl px-7 py-6 max-w-sm text-center shadow-2xl"
+      >
+        <i class="ri-camera-off-line text-4xl text-red-400 mb-3 block"></i>
+        <p class="text-red-200 text-sm font-medium leading-relaxed">
+          Kamera tidak terdeteksi / izin ditolak
+        </p>
+        <p class="text-red-300/50 text-xs mt-2">
+          Izinkan akses kamera di browser
+        </p>
+      </div>
+    </div>
+
+    <!-- Top Bar -->
+    <div class="absolute top-0 left-0 right-0 z-30 pointer-events-none">
+      <div
+        class="flex items-center justify-between px-3 sm:px-5 py-3.5 bg-gradient-to-b from-black/75 to-transparent"
+      >
+        <div class="pointer-events-auto flex items-center gap-2.5">
+          <div
+            class="w-8 h-8 rounded-full bg-gradient-to-br from-rose-500 to-pink-600 flex items-center justify-center shadow-lg shadow-rose-500/30"
+          >
+            <i class="ri-heart-3-fill text-white text-sm"></i>
+          </div>
+          <div>
+            <h1
+              class="text-sm sm:text-base font-semibold tracking-tight text-white/95 leading-none"
+            >
+              ALL OF ME
+            </h1>
+            <p class="text-[10px] text-rose-400/70 mt-0.5 hidden sm:block">
+              Love Particle Gesture
+            </p>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2 pointer-events-auto">
+          <!-- Current Shape -->
+          <div
+            id="shape-label"
+            class="px-3.5 py-1.5 rounded-full glass border border-white/10 text-[11px] sm:text-xs font-medium text-rose-300 flex items-center gap-1.5 transition-all duration-300"
+          >
+            <i class="ri-hearts-fill text-rose-400 text-xs"></i>
+            <span>Hearts</span>
+          </div>
+
+          <!-- Music Button -->
+          <button
+            id="btn-music"
+            class="w-9 h-9 rounded-full glass border border-white/10 flex items-center justify-center text-base hover:bg-white/10 transition active:scale-90"
+            title="Play / Pause"
+          >
+            <i class="ri-play-fill"></i>
+          </button>
+
+          <!-- Volume -->
+          <div
+            class="hidden sm:flex items-center gap-1.5 glass border border-white/10 rounded-full px-2.5 py-1.5"
+          >
+            <i class="ri-volume-up-line text-white/50 text-xs"></i>
+            <input
+              id="volume-slider"
+              type="range"
+              min="0"
+              max="1"
+              step="0.01"
+              value="0.7"
+              class="w-16"
+            />
+          </div>
+
+          <!-- Fullscreen -->
+          <button
+            id="btn-fs"
+            class="w-9 h-9 rounded-full glass border border-white/10 flex items-center justify-center text-sm hover:bg-white/10 transition active:scale-90"
+            title="Fullscreen"
+          >
+            <i class="ri-fullscreen-line"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Instructions Panel -->
+    <div
+      id="info-panel"
+      class="absolute top-16 sm:top-[4.5rem] right-3 sm:right-5 z-20 max-w-[220px] sm:max-w-[240px] fade-in"
+    >
+      <div
+        class="glass border border-white/10 rounded-2xl p-3.5 text-[11px] sm:text-xs shadow-2xl"
+      >
+        <div class="flex items-center justify-between mb-2.5">
+          <p
+            class="text-[9px] uppercase tracking-widest text-white/40 font-medium flex items-center gap-1.5"
+          >
+            <i class="ri-hand-heart-line text-rose-400/70"></i>
+            Gestur Cinta
+          </p>
+          <button
+            id="btn-toggle-info"
+            class="text-white/40 hover:text-white transition sm:hidden"
+          >
+            <i class="ri-close-line text-sm"></i>
+          </button>
+        </div>
+        <ul class="space-y-2 text-white/80">
+          <li class="flex items-center gap-2.5">
+            <span
+              class="w-6 h-6 flex items-center justify-center rounded-lg bg-rose-500/15 text-rose-300"
+              ><i class="ri-hand-line text-xs"></i
+            ></span>
+            <span>Terbuka → <b class="text-rose-300">Hearts</b></span>
+          </li>
+          <li class="flex items-center gap-2.5">
+            <span
+              class="w-6 h-6 flex items-center justify-center rounded-lg bg-rose-600/20 text-rose-300"
+              ><i class="ri-hand-coin-line text-xs"></i
+            ></span>
+            <span>Kepal → <b class="text-rose-300">Heart</b></span>
+          </li>
+          <li class="flex items-center gap-2.5">
+            <span
+              class="w-6 h-6 flex items-center justify-center rounded-lg bg-pink-500/15 text-pink-300"
+              ><i class="ri-arrow-up-line text-xs"></i
+            ></span>
+            <span>Telunjuk → <b class="text-pink-300">I Love You</b></span>
+          </li>
+          <li class="flex items-center gap-2.5">
+            <span
+              class="w-6 h-6 flex items-center justify-center rounded-lg bg-fuchsia-500/15 text-fuchsia-300"
+              ><i class="ri-peace-line text-xs"></i
+            ></span>
+            <span>Peace → <b class="text-fuchsia-300">Miss You</b></span>
+          </li>
+          <li class="flex items-center gap-2.5">
+            <span
+              class="w-6 h-6 flex items-center justify-center rounded-lg bg-amber-500/15 text-amber-300"
+              ><i class="ri-rock-line text-xs"></i
+            ></span>
+            <span>Rock → <b class="text-amber-300">Love Star</b></span>
+          </li>
+          <li class="flex items-center gap-2.5">
+            <span
+              class="w-6 h-6 flex items-center justify-center rounded-lg bg-violet-500/15 text-violet-300"
+              ><i class="ri-number-3 text-xs"></i
+            ></span>
+            <span>3 Jari → <b class="text-violet-300">Forever</b></span>
+          </li>
+          <li class="flex items-center gap-2.5">
+            <span
+              class="w-6 h-6 flex items-center justify-center rounded-lg bg-sky-500/15 text-sky-300"
+              ><i class="ri-thumb-up-line text-xs"></i
+            ></span>
+            <span>Jempol → <b class="text-sky-300">Like</b></span>
+          </li>
+          <li class="flex items-center gap-2.5">
+            <span
+              class="w-6 h-6 flex items-center justify-center rounded-lg bg-emerald-500/15 text-emerald-300"
+              ><i class="ri-heart-add-line text-xs"></i
+            ></span>
+            <span>Pinky → <b class="text-emerald-300">Promise</b></span>
+          </li>
+          <li class="flex items-center gap-2.5">
+            <span
+              class="w-6 h-6 flex items-center justify-center rounded-lg bg-orange-500/15 text-orange-300"
+              ><i class="ri-hearts-line text-xs"></i
+            ></span>
+            <span>ILY Sign → <b class="text-orange-300">XOXO</b></span>
+          </li>
+        </ul>
+      </div>
+    </div>
+
+    <button
+      id="btn-show-info"
+      class="absolute top-16 right-3 z-20 w-9 h-9 rounded-full glass border border-white/10 flex items-center justify-center text-sm sm:hidden hidden hover:bg-white/10 transition"
+    >
+      <i class="ri-information-line"></i>
+    </button>
+
+    <!-- Webcam -->
+    <div class="absolute bottom-4 left-3 sm:bottom-5 sm:left-5 z-20">
+      <div class="relative group">
+        <div
+          class="absolute -inset-0.5 bg-gradient-to-r from-rose-500 via-pink-400 to-fuchsia-500 rounded-xl opacity-50 blur-[3px] group-hover:opacity-90 transition duration-500"
+        ></div>
+        <div
+          class="relative bg-gray-900 rounded-xl overflow-hidden border border-white/10 shadow-2xl"
+        >
+          <video
+            id="webcam"
+            autoplay
+            playsinline
+            muted
+            class="w-28 h-21 sm:w-36 sm:h-27 md:w-40 md:h-30 object-cover block"
+          ></video>
+          <div
+            class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/75 to-transparent px-2 py-1.5"
+          >
+            <div class="flex items-center gap-1.5">
+              <span
+                class="w-1.5 h-1.5 rounded-full bg-rose-400 animate-pulse"
+              ></span>
+              <span class="text-[9px] font-medium text-white/85 tracking-wide"
+                >LIVE</span
+              >
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bottom hint -->
+    <div
+      class="absolute bottom-4 right-3 sm:bottom-5 sm:right-5 z-20 text-[9px] sm:text-[10px] text-white/30 pointer-events-none flex items-center gap-1.5"
+    >
+      <i class="ri-hand-heart-line text-rose-400/40"></i>
+      Gerakkan tangan di depan kamera
+    </div>
+
+    <script>
+      // ========== LOCAL AUDIO ==========
+      const bgMusic = document.getElementById("bg-music");
+      let isPlaying = false;
+      bgMusic.volume = 0.7;
+
+      const btnMusic = document.getElementById("btn-music");
+      btnMusic.addEventListener("click", () => {
+        if (isPlaying) {
+          bgMusic.pause();
+          btnMusic.innerHTML = '<i class="ri-play-fill"></i>';
+          isPlaying = false;
+        } else {
+          bgMusic.play().catch(() => {
+            alert("Pastikan file 'all-of-me.mp3' ada di folder yang sama.");
+          });
+          btnMusic.innerHTML = '<i class="ri-pause-fill"></i>';
+          isPlaying = true;
+        }
+      });
+
+      document
+        .getElementById("volume-slider")
+        .addEventListener("input", (e) => {
+          bgMusic.volume = parseFloat(e.target.value);
+        });
+
+      // ========== THREE.JS + PARTICLES ==========
+      const PARTICLE_COUNT = 9000;
+      let scene, camera, renderer, particles, geometry;
+      let currentPositions = new Float32Array(PARTICLE_COUNT * 3);
+      let targetPositions = new Float32Array(PARTICLE_COUNT * 3);
+      let currentColors = new Float32Array(PARTICLE_COUNT * 3);
+      let targetColors = new Float32Array(PARTICLE_COUNT * 3);
+
+      let activeShapeIndex = 0;
+      const shapeNames = [
+        "Hearts",
+        "Heart",
+        "I Love You",
+        "Miss You",
+        "Love Star",
+        "Forever",
+        "Like",
+        "Promise",
+        "XOXO",
+      ];
+      const shapeIcons = [
+        "ri-hearts-fill",
+        "ri-heart-3-fill",
+        "ri-heart-add-fill",
+        "ri-emotion-sad-line",
+        "ri-star-smile-fill",
+        "ri-infinity-line",
+        "ri-thumb-up-fill",
+        "ri-hand-heart-fill",
+        "ri-hearts-line",
+      ];
+
+      const LERP_SPEED = 0.038;
+      const ROTATION_LERP = 0.05;
+      let breathPhase = 0;
+
+      // ========== SHAPE GENERATORS ==========
+      function getHeartsCloud() {
+        const pos = new Float32Array(PARTICLE_COUNT * 3);
+        for (let i = 0; i < PARTICLE_COUNT; i++) {
+          if (Math.random() < 0.38) {
+            const t = Math.random() * Math.PI * 2;
+            let x = 16 * Math.pow(Math.sin(t), 3);
+            let y =
+              13 * Math.cos(t) -
+              5 * Math.cos(2 * t) -
+              2 * Math.cos(3 * t) -
+              Math.cos(4 * t);
+            const scale = 0.035 + Math.random() * 0.07;
+            const ox = (Math.random() - 0.5) * 15;
+            const oy = (Math.random() - 0.5) * 13;
+            pos[i * 3] = x * scale + ox;
+            pos[i * 3 + 1] = y * scale + oy;
+            pos[i * 3 + 2] = (Math.random() - 0.5) * 9;
+          } else {
+            pos[i * 3] = (Math.random() - 0.5) * 17;
+            pos[i * 3 + 1] = (Math.random() - 0.5) * 15;
+            pos[i * 3 + 2] = (Math.random() - 0.5) * 13;
+          }
+        }
+        return pos;
+      }
+
+      function getBigHeart() {
+        const pos = new Float32Array(PARTICLE_COUNT * 3);
+        for (let i = 0; i < PARTICLE_COUNT; i++) {
+          const t = Math.random() * Math.PI * 2;
+          const u = (Math.random() - 0.5) * 2.4;
+          let x = 16 * Math.pow(Math.sin(t), 3);
+          let y =
+            13 * Math.cos(t) -
+            5 * Math.cos(2 * t) -
+            2 * Math.cos(3 * t) -
+            Math.cos(4 * t);
+          const scale = 0.29 + Math.random() * 0.05;
+          pos[i * 3] = x * scale + (Math.random() - 0.5) * 0.1;
+          pos[i * 3 + 1] = y * scale + (Math.random() - 0.5) * 0.1;
+          pos[i * 3 + 2] = u * 0.9 + (Math.random() - 0.5) * 0.22;
+        }
+        return pos;
+      }
+
+      function getTextShape(text, fontSize = 46, w = 720, h = 130) {
+        const c = document.createElement("canvas");
+        const ctx = c.getContext("2d");
+        c.width = w;
+        c.height = h;
+        ctx.fillStyle = "#000";
+        ctx.fillRect(0, 0, w, h);
+        ctx.fillStyle = "#fff";
+        ctx.font = `bold ${fontSize}px "Fira Code", monospace`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(text, w / 2, h / 2 + 3);
+
+        const img = ctx.getImageData(0, 0, w, h);
+        const pixels = [];
+        for (let y = 0; y < h; y += 2) {
+          for (let x = 0; x < w; x += 2) {
+            if (img.data[(y * w + x) * 4] > 128) {
+              pixels.push({
+                x: (x - w / 2) * 0.0255,
+                y: -(y - h / 2) * 0.0255,
+              });
+            }
+          }
+        }
+        const pos = new Float32Array(PARTICLE_COUNT * 3);
+        for (let i = 0; i < PARTICLE_COUNT; i++) {
+          const pt = pixels[i % pixels.length];
+          pos[i * 3] = pt.x + (Math.random() - 0.5) * 0.016;
+          pos[i * 3 + 1] = pt.y + (Math.random() - 0.5) * 0.016;
+          pos[i * 3 + 2] = (Math.random() - 0.5) * 0.14;
+        }
+        return pos;
+      }
+
+      function getLoveStar() {
+        const pos = new Float32Array(PARTICLE_COUNT * 3);
+        for (let i = 0; i < PARTICLE_COUNT; i++) {
+          const spike = Math.floor(Math.random() * 5);
+          const baseAngle = spike * ((Math.PI * 2) / 5) - Math.PI / 2;
+          const t = Math.random();
+          const r =
+            t < 0.48 ? 0.35 + Math.random() * 1.4 : 2.05 + Math.random() * 2.0;
+          const spread = (Math.random() - 0.5) * 0.26;
+          pos[i * 3] = r * Math.cos(baseAngle + spread);
+          pos[i * 3 + 1] = r * Math.sin(baseAngle + spread);
+          pos[i * 3 + 2] = (Math.random() - 0.5) * 1.35;
+        }
+        return pos;
+      }
+
+      function getForever() {
+        const pos = new Float32Array(PARTICLE_COUNT * 3);
+        for (let i = 0; i < PARTICLE_COUNT; i++) {
+          if (i < PARTICLE_COUNT * 0.26) {
+            const t = Math.random() * Math.PI * 2;
+            let x = 16 * Math.pow(Math.sin(t), 3);
+            let y =
+              13 * Math.cos(t) -
+              5 * Math.cos(2 * t) -
+              2 * Math.cos(3 * t) -
+              Math.cos(4 * t);
+            const scale = 0.085 + Math.random() * 0.04;
+            pos[i * 3] = x * scale;
+            pos[i * 3 + 1] = y * scale;
+            pos[i * 3 + 2] = (Math.random() - 0.5) * 0.55;
+          } else {
+            const arm = Math.floor(Math.random() * 3);
+            const t = Math.random() * 5.4;
+            const angle =
+              t + arm * ((Math.PI * 2) / 3) + (Math.random() - 0.5) * 0.28;
+            const r = 0.65 + t * 1.08 + (Math.random() - 0.5) * 0.48;
+            pos[i * 3] = r * Math.cos(angle);
+            pos[i * 3 + 1] = (Math.random() - 0.5) * (0.38 + t * 0.13);
+            pos[i * 3 + 2] = r * Math.sin(angle);
+          }
+        }
+        return pos;
+      }
+
+      function getLikeThumb() {
+        // stylized thumbs-up shape
+        const pos = new Float32Array(PARTICLE_COUNT * 3);
+        for (let i = 0; i < PARTICLE_COUNT; i++) {
+          const part = Math.random();
+          if (part < 0.45) {
+            // vertical bar
+            pos[i * 3] = (Math.random() - 0.5) * 1.1;
+            pos[i * 3 + 1] = -2.2 + Math.random() * 4.6;
+            pos[i * 3 + 2] = (Math.random() - 0.5) * 0.9;
+          } else if (part < 0.75) {
+            // thumb tip curve
+            const t = Math.random() * Math.PI * 0.9;
+            pos[i * 3] = 0.9 + Math.sin(t) * 1.6;
+            pos[i * 3 + 1] = 1.8 + Math.cos(t) * 1.3;
+            pos[i * 3 + 2] = (Math.random() - 0.5) * 0.7;
+          } else {
+            // soft cloud around
+            pos[i * 3] = (Math.random() - 0.5) * 5;
+            pos[i * 3 + 1] = (Math.random() - 0.5) * 5.5;
+            pos[i * 3 + 2] = (Math.random() - 0.5) * 3;
+          }
+        }
+        return pos;
+      }
+
+      function getPromise() {
+        // pinky promise – soft ring + small heart
+        const pos = new Float32Array(PARTICLE_COUNT * 3);
+        for (let i = 0; i < PARTICLE_COUNT; i++) {
+          if (i < PARTICLE_COUNT * 0.55) {
+            const theta = Math.random() * Math.PI * 2;
+            const r = 2.6 + (Math.random() - 0.5) * 0.5;
+            pos[i * 3] = r * Math.cos(theta);
+            pos[i * 3 + 1] = (Math.random() - 0.5) * 0.35;
+            pos[i * 3 + 2] = r * Math.sin(theta);
+          } else {
+            const t = Math.random() * Math.PI * 2;
+            let x = 16 * Math.pow(Math.sin(t), 3);
+            let y =
+              13 * Math.cos(t) -
+              5 * Math.cos(2 * t) -
+              2 * Math.cos(3 * t) -
+              Math.cos(4 * t);
+            const scale = 0.07 + Math.random() * 0.03;
+            pos[i * 3] = x * scale;
+            pos[i * 3 + 1] = y * scale + 0.1;
+            pos[i * 3 + 2] = (Math.random() - 0.5) * 0.4;
+          }
+        }
+        return pos;
+      }
+
+      function getXOXO() {
+        return getTextShape("XOXO", 58, 520, 120);
+      }
+
+      // ========== COLORS ==========
+      function makeColors(baseR, baseG, baseB, variance = 0.2) {
+        const c = new Float32Array(PARTICLE_COUNT * 3);
+        for (let i = 0; i < PARTICLE_COUNT; i++) {
+          c[i * 3] = Math.min(1, baseR + (Math.random() - 0.3) * variance);
+          c[i * 3 + 1] = Math.min(1, baseG + (Math.random() - 0.3) * variance);
+          c[i * 3 + 2] = Math.min(1, baseB + (Math.random() - 0.3) * variance);
+        }
+        return c;
+      }
+
+      const shapes = [
+        getHeartsCloud(),
+        getBigHeart(),
+        getTextShape("I LOVE YOU", 44, 740, 130),
+        getTextShape("I MISS YOU", 46, 720, 130),
+        getLoveStar(),
+        getForever(),
+        getLikeThumb(),
+        getPromise(),
+        getXOXO(),
+      ];
+
+      const shapeColors = [
+        makeColors(1.0, 0.45, 0.65, 0.25), // Hearts
+        makeColors(0.95, 0.15, 0.3, 0.2), // Heart
+        makeColors(1.0, 0.6, 0.75, 0.15), // I Love You
+        makeColors(0.95, 0.45, 0.7, 0.2), // Miss You
+        makeColors(1.0, 0.8, 0.35, 0.2), // Love Star
+        makeColors(0.85, 0.35, 0.75, 0.25), // Forever
+        makeColors(0.4, 0.75, 1.0, 0.2), // Like
+        makeColors(0.35, 0.9, 0.7, 0.2), // Promise
+        makeColors(1.0, 0.55, 0.4, 0.2), // XOXO
+      ];
+
+      // ========== THREE.JS INIT ==========
+      function initThreeJS() {
+        scene = new THREE.Scene();
+        camera = new THREE.PerspectiveCamera(
+          56,
+          window.innerWidth / window.innerHeight,
+          0.1,
+          1000,
+        );
+        camera.position.z = 11.8;
+
+        renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        document.body.appendChild(renderer.domElement);
+
+        geometry = new THREE.BufferGeometry();
+        for (let i = 0; i < PARTICLE_COUNT * 3; i++) {
+          currentPositions[i] = shapes[0][i];
+          targetPositions[i] = shapes[0][i];
+          currentColors[i] = shapeColors[0][i];
+          targetColors[i] = shapeColors[0][i];
+        }
+        geometry.setAttribute(
+          "position",
+          new THREE.BufferAttribute(currentPositions, 3),
+        );
+        geometry.setAttribute(
+          "color",
+          new THREE.BufferAttribute(currentColors, 3),
+        );
+
+        const material = new THREE.PointsMaterial({
+          size: 0.046,
+          vertexColors: true,
+          blending: THREE.AdditiveBlending,
+          transparent: true,
+          opacity: 0.93,
+          depthWrite: false,
+          sizeAttenuation: true,
+        });
+        particles = new THREE.Points(geometry, material);
+        scene.add(particles);
+
+        window.addEventListener("resize", onWindowResize);
+        animate();
+      }
+
+      function setShape(idx) {
+        if (activeShapeIndex === idx) return;
+        activeShapeIndex = idx;
+        const tp = shapes[idx];
+        const tc = shapeColors[idx];
+        for (let i = 0; i < PARTICLE_COUNT * 3; i++) {
+          targetPositions[i] = tp[i];
+          targetColors[i] = tc[i];
+        }
+
+        // Update label with pop animation
+        const label = document.getElementById("shape-label");
+        label.classList.remove("shape-pop");
+        void label.offsetWidth; // reflow
+        label.classList.add("shape-pop");
+        label.innerHTML = `<i class="${shapeIcons[idx]} text-rose-400 text-xs"></i><span>${shapeNames[idx]}</span>`;
+      }
+
+      function animate() {
+        requestAnimationFrame(animate);
+        const pos = geometry.attributes.position.array;
+        const col = geometry.attributes.color.array;
+
+        // Smooth lerp
+        for (let i = 0; i < PARTICLE_COUNT * 3; i++) {
+          pos[i] += (targetPositions[i] - pos[i]) * LERP_SPEED;
+          col[i] += (targetColors[i] - col[i]) * LERP_SPEED;
+        }
+        geometry.attributes.position.needsUpdate = true;
+        geometry.attributes.color.needsUpdate = true;
+
+        // Breathing effect (subtle size pulse)
+        breathPhase += 0.012;
+        const breath = 1 + Math.sin(breathPhase) * 0.07;
+        particles.material.size = 0.046 * breath;
+
+        // Rotation per shape
+        if (
+          activeShapeIndex === 2 ||
+          activeShapeIndex === 3 ||
+          activeShapeIndex === 8
+        ) {
+          // Text shapes → very stable
+          particles.rotation.x = THREE.MathUtils.lerp(
+            particles.rotation.x,
+            0,
+            ROTATION_LERP,
+          );
+          particles.rotation.y = THREE.MathUtils.lerp(
+            particles.rotation.y,
+            0,
+            ROTATION_LERP,
+          );
+          particles.rotation.z = THREE.MathUtils.lerp(
+            particles.rotation.z,
+            0,
+            ROTATION_LERP,
+          );
+        } else if (activeShapeIndex === 1) {
+          particles.rotation.y += 0.0045;
+          particles.rotation.x = THREE.MathUtils.lerp(
+            particles.rotation.x,
+            0.05,
+            0.03,
+          );
+        } else if (activeShapeIndex === 4) {
+          particles.rotation.z += 0.0036;
+          particles.rotation.y += 0.0026;
+        } else if (activeShapeIndex === 5) {
+          particles.rotation.y += 0.0072;
+        } else if (activeShapeIndex === 6) {
+          particles.rotation.y += 0.003;
+        } else if (activeShapeIndex === 7) {
+          particles.rotation.y += 0.004;
+          particles.rotation.x = THREE.MathUtils.lerp(
+            particles.rotation.x,
+            0.1,
+            0.02,
+          );
+        } else {
+          particles.rotation.y += 0.002;
+        }
+
+        renderer.render(scene, camera);
+      }
+
+      function onWindowResize() {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+      }
+
+      // ========== GESTURE DETECTION (9 gestures) ==========
+      function isFingerUp(lm, tip, pip) {
+        return lm[tip].y < lm[pip].y;
+      }
+
+      function detectGesture(lm) {
+        const idx = isFingerUp(lm, 8, 6);
+        const mid = isFingerUp(lm, 12, 10);
+        const rng = isFingerUp(lm, 16, 14);
+        const pnk = isFingerUp(lm, 20, 18);
+
+        // Thumb up detection (tip higher than IP and quite extended)
+        const thumbUp = lm[4].y < lm[3].y - 0.02 && lm[4].x > lm[3].x + 0.02; // roughly pointing up-ish
+
+        // ILY American Sign Language: Index + Pinky up, Mid+Ring down
+        if (idx && !mid && !rng && pnk) return 4; // Rock → Love Star (same as before)
+
+        // Classic ILY (index + pinky + thumb sometimes, but we use index+pinky)
+        // We already mapped rock to 4. Now:
+        if (idx && mid && !rng && pnk) return 8; // Index+Mid+Pinky → XOXO
+
+        if (idx && mid && rng && !pnk) return 5; // 3 fingers → Forever
+        if (idx && mid && !rng && !pnk) return 3; // Peace → Miss You
+        if (idx && !mid && !rng && !pnk) return 2; // Index only → I Love You
+        if (!idx && !mid && !rng && pnk) return 7; // Pinky only → Promise
+        if (!idx && !mid && !rng && !pnk && thumbUp) return 6; // Thumb up → Like
+        if (!idx && !mid && !rng && !pnk) return 1; // Fist → Heart
+        if (idx && mid && rng && pnk) return 0; // Open → Hearts
+
+        return activeShapeIndex;
+      }
+
+      function onResults(results) {
+        if (results.multiHandLandmarks?.length > 0) {
+          setShape(detectGesture(results.multiHandLandmarks[0]));
+        }
+      }
+
+      // ========== UI ==========
+      document.getElementById("btn-fs").addEventListener("click", () => {
+        if (!document.fullscreenElement) {
+          document.documentElement.requestFullscreen?.();
+          document.getElementById("btn-fs").innerHTML =
+            '<i class="ri-fullscreen-exit-line"></i>';
+        } else {
+          document.exitFullscreen?.();
+          document.getElementById("btn-fs").innerHTML =
+            '<i class="ri-fullscreen-line"></i>';
+        }
+      });
+
+      const infoPanel = document.getElementById("info-panel");
+      const btnShow = document.getElementById("btn-show-info");
+      document
+        .getElementById("btn-toggle-info")
+        ?.addEventListener("click", () => {
+          infoPanel.classList.add("hidden");
+          btnShow.classList.remove("hidden");
+        });
+      btnShow?.addEventListener("click", () => {
+        infoPanel.classList.remove("hidden");
+        btnShow.classList.add("hidden");
+      });
+
+      // ========== START ==========
+      const videoElement = document.getElementById("webcam");
+      const errorMsg = document.getElementById("error-msg");
+
+      initThreeJS();
+
+      const hands = new Hands({
+        locateFile: (file) =>
+          `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`,
+      });
+      hands.setOptions({
+        maxNumHands: 1,
+        modelComplexity: 1,
+        minDetectionConfidence: 0.58,
+        minTrackingConfidence: 0.55,
+      });
+      hands.onResults(onResults);
+
+      navigator.mediaDevices
+        .getUserMedia({ video: { facingMode: "user" } })
+        .then((stream) => {
+          videoElement.srcObject = stream;
+          const cam = new Camera(videoElement, {
+            onFrame: async () => {
+              await hands.send({ image: videoElement });
+            },
+            width: 480,
+            height: 360,
+          });
+          cam.start();
+        })
+        .catch((err) => {
+          console.error(err);
+          errorMsg.classList.remove("hidden");
+        });
+    </script>
+  </body>
+</html>
